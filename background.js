@@ -17,7 +17,6 @@ function ba2str(ba) {
 }
 
 function getHeaders(obj) {
-  console.log('headers are', obj);
   const x = obj.url.split('/');
   const host = x[2].split(':')[0];
   x.splice(0, 3);
@@ -73,7 +72,6 @@ function getHeaders(obj) {
 function prepTab(tabId, urlFilters) {
   const oBR_handler = function (details) {
     if (details.method === "OPTIONS") return;
-    console.log('in onBeforeRequest', details);
     // chrome.webRequest.onBeforeRequest.removeListener(oBR_handler);
     chrome.storage.session.set({ "oBR_details": details })
   };
@@ -88,7 +86,6 @@ function prepTab(tabId, urlFilters) {
 
   const oBSH_handler = function (details) {
     if (details.method === "OPTIONS") return;
-    console.log('in onBeforeSendHeaders', details);
     // chrome.webRequest.onBeforeSendHeaders.removeListener(oBSH_handler);
     chrome.storage.session.set({ "oBSH_details": details })
   };
@@ -103,7 +100,6 @@ function prepTab(tabId, urlFilters) {
 
   const oSH_handler = function (details) {
     if (details.method === "OPTIONS") return;
-    console.log('in onSendHeaders');
     // chrome.webRequest.onSendHeaders.removeListener(oSH_handler);
     recordHeaderDetails()
   };
@@ -122,9 +118,6 @@ async function recordHeaderDetails() {
   oBR_details = oBR_details.oBR_details;
   oBSH_details = oBSH_details.oBSH_details;
 
-  console.log(oBR_details)
-  console.log(oBSH_details)
-
   if (oBR_details.url !== oBSH_details.url) return;
   // if (oBR_details.requestId !== oBSH_details.requestId) return;
   if (oBR_details.method === 'POST') {
@@ -139,26 +132,55 @@ async function recordHeaderDetails() {
       port: rv.port,
     }
   })
-  console.log(rv.headers, rv.server, rv.port)
-}
-
-async function onInitiate(url, urlFilters) {
-  // 1. Create new tab with the url
-  const tab = await chrome.tabs.create({})
-  // 1.1 update extension UI to show it's active
-
-  // 2. With the returned tab id, create request header listeners over the url prefix, store header to session storage
-  prepTab(tab.id, urlFilters)
 
   // 2.1 In header listeners, update extension UI when the url filter is matched and header is stored
-
-  // 2.2 Update the tab to have the url
-  await chrome.tabs.update(tabId = tab.id, { url: url })
+  chrome.action.setBadgeBackgroundColor(
+    {
+      color: 'green'
+    },
+  );
+  chrome.action.setBadgeText(
+    {
+      text: 'ready'
+    },
+  )
 
   // 3. Create listener on the button event, have it
   // 3.1 trigger the notary flow and return notarization future
   // 3.2 update extension UI to show process completed and no longer active
   // 3.3 close the tab
+  chrome.action.onClicked.addListener(() => {
+    startNotarization()
+  });
+}
+
+async function startNotarization() {
+  let headerDetails = await chrome.storage.session.get("headerDetails");
+  console.log(headerDetails)
+}
+
+async function onInitiate(url, urlFilters) {
+  // 1. Create new tab with the url
+  const tab = await chrome.tabs.create({})
+
+  // 1.1 update extension UI to show it's active
+  chrome.action.setBadgeBackgroundColor(
+    {
+      color: 'orange'
+    },
+  );
+  chrome.action.setBadgeText(
+    {
+      text: 'active'
+    },
+  )
+
+  // 2. With the returned tab id, create request header listeners over the url prefix, store header to session storage
+  prepTab(tab.id, urlFilters)
+
+  // 2.2 Update the tab to have the url
+  await chrome.tabs.update(tabId = tab.id, { url: url })
+
 }
 
 // Create message listener to call onInitiate
