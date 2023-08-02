@@ -69,10 +69,10 @@ function getHeaders(obj) {
   };
 }
 
-function prepTab(tabId, urlFilters) {
+function prepNotarization(tabId, urlFilters) {
   const oBR_handler = function (details) {
     if (details.method === "OPTIONS") return;
-    // chrome.webRequest.onBeforeRequest.removeListener(oBR_handler);
+    chrome.webRequest.onBeforeRequest.removeListener(oBR_handler);
     chrome.storage.session.set({ "oBR_details": details })
   };
   chrome.webRequest.onBeforeRequest.addListener(
@@ -86,7 +86,7 @@ function prepTab(tabId, urlFilters) {
 
   const oBSH_handler = function (details) {
     if (details.method === "OPTIONS") return;
-    // chrome.webRequest.onBeforeSendHeaders.removeListener(oBSH_handler);
+    chrome.webRequest.onBeforeSendHeaders.removeListener(oBSH_handler);
     chrome.storage.session.set({ "oBSH_details": details })
   };
   const extraInfoSpec = ['requestHeaders'];
@@ -98,17 +98,52 @@ function prepTab(tabId, urlFilters) {
     types: ['main_frame', 'xmlhttprequest']
   }, extraInfoSpec);
 
-  const oSH_handler = function (details) {
-    if (details.method === "OPTIONS") return;
-    // chrome.webRequest.onSendHeaders.removeListener(oSH_handler);
-    recordHeaderDetails()
-  };
-  chrome.webRequest.onSendHeaders.addListener(
-    oSH_handler, {
-    urls: urlFilters,
-    tabId: tabId,
-    types: ['main_frame', 'xmlhttprequest']
-  });
+  const notarization = new Promise((resolve) => {
+    const oSH_handler = async function (details) {
+      if (details.method === "OPTIONS") return;
+      chrome.webRequest.onSendHeaders.removeListener(oSH_handler);
+      await recordHeaderDetails()
+
+      // 2.1 In header listeners, update extension UI when the url filter is matched and header is stored
+      chrome.action.setBadgeBackgroundColor(
+        {
+          color: 'green'
+        },
+      );
+      chrome.action.setBadgeText(
+        {
+          text: 'ready'
+        },
+      )
+
+      // 3. Create listener on the button event, have it
+      const onClickNotary = async () => {
+        chrome.action.onClicked.removeListener(onClickNotary);
+
+        // 3.1 trigger the notary flow and return notarization future
+        const result = await startNotarization()
+        resolve(result)
+
+        // 3.2 update extension UI to show process completed and no longer active
+        chrome.action.setBadgeText(
+          {
+            text: ''
+          },
+        )
+
+        // 3.3 close the tab
+        chrome.tabs.remove(tabId)
+      }
+      chrome.action.onClicked.addListener(onClickNotary);
+    };
+    chrome.webRequest.onSendHeaders.addListener(
+      oSH_handler, {
+      urls: urlFilters,
+      tabId: tabId,
+      types: ['main_frame', 'xmlhttprequest']
+    });
+  })
+  return notarization
 }
 
 async function recordHeaderDetails() {
@@ -132,36 +167,19 @@ async function recordHeaderDetails() {
       port: rv.port,
     }
   })
-
-  // 2.1 In header listeners, update extension UI when the url filter is matched and header is stored
-  chrome.action.setBadgeBackgroundColor(
-    {
-      color: 'green'
-    },
-  );
-  chrome.action.setBadgeText(
-    {
-      text: 'ready'
-    },
-  )
-
-  // 3. Create listener on the button event, have it
-  // 3.1 trigger the notary flow and return notarization future
-  // 3.2 update extension UI to show process completed and no longer active
-  // 3.3 close the tab
-  chrome.action.onClicked.addListener(() => {
-    startNotarization()
-  });
 }
 
 async function startNotarization() {
   let headerDetails = await chrome.storage.session.get("headerDetails");
-  console.log(headerDetails)
+  return headerDetails
 }
 
 async function onInitiate(url, urlFilters) {
   // 1. Create new tab with the url
-  const tab = await chrome.tabs.create({})
+  const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  const tab = await chrome.tabs.create({
+    openerTabId: activeTabs && activeTabs.length > 0 ? activeTabs[0].id : null
+  })
 
   // 1.1 update extension UI to show it's active
   chrome.action.setBadgeBackgroundColor(
@@ -176,12 +194,18 @@ async function onInitiate(url, urlFilters) {
   )
 
   // 2. With the returned tab id, create request header listeners over the url prefix, store header to session storage
-  prepTab(tab.id, urlFilters)
+  const notarization = prepNotarization(tab.id, urlFilters)
 
   // 2.2 Update the tab to have the url
-  await chrome.tabs.update(tabId = tab.id, { url: url })
+  chrome.tabs.update(tabId = tab.id, { url: url })
 
+  return notarization
 }
 
-// Create message listener to call onInitiate
-onInitiate("https://jomo.id/prove?flowId=103&publicAccountId=abcd", ["https://us-central1-jomo-omni.cloudfunctions.net/backend_apis/api/get_attestation_tree"]) 
+const initiateNotary = async (message, sender, sendResponse) => {
+  if (message === 'initiateNotary') {
+    const result = await onInitiate("https://jomo.id/prove?flowId=103&publicAccountId=abcd", ["https://us-central1-jomo-omni.cloudfunctions.net/backend_apis/api/get_attestation_tree"])
+    sendResponse(result);
+  }
+}
+chrome.runtime.onMessageExternal.addListener(initiateNotary);
