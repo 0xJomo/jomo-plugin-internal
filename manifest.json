@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "manifest_version": 3,
   "name": "Jomo Helper",
-  "description": "Jomo Helper observes your session to the target website so Jomo web can then use the session to retrieve your data. Rest assured that, at no time will your credentials or data be sent or accessed by anyone except for your own device, everything stays on your local machine.",
+  "description": "Jomo Helper observes your session to the target website so Jomo web can then use the session to retrieve your data.",
   "action": {
     "default_title": "Jomo Helper"
   },
@@ -14,7 +14,6 @@
     "512": "logo_simple.png"
   },
   "permissions": [
-    "scripting",
     "tabs",
     "webRequest",
     "storage"
