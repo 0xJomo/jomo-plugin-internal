@@ -10,6 +10,9 @@
     "service_worker": "background.js",
     "type": "module"
   },
+  "icons": {
+    "512": "logo_simple.png"
+  },
   "permissions": [
     "scripting",
     "tabs",
