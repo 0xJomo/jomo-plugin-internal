@@ -7,7 +7,6 @@ function isChrome() {
   return true
 }
 
-
 function ba2str(ba) {
   let result = '';
   for (const b of ba) {
@@ -17,6 +16,8 @@ function ba2str(ba) {
 }
 
 function getHeaders(obj) {
+  let headers_obj = {}
+
   const x = obj.url.split('/');
   const host = x[2].split(':')[0];
   x.splice(0, 3);
@@ -35,18 +36,18 @@ function getHeaders(obj) {
       h.value = 'identity;q=1, *;q=0';
     }
     headers += h.name + ': ' + h.value + '\r\n';
+    headers_obj[h.name] = h.value
   }
+  let content = "";
   if (obj.method === 'GET') {
     headers += '\r\n';
   }
   else if (obj.method === 'POST') {
-    let content;
     if (obj.requestBody.raw !== undefined) {
       content = ba2str(new Uint8Array(obj.requestBody.raw[0].bytes));
     }
     else {
       const keys = Object.keys(obj.requestBody.formData);
-      content = '';
       for (var key of keys) {
         content += key + '=' + obj.requestBody.formData[key] + '&';
       }
@@ -63,13 +64,17 @@ function getHeaders(obj) {
     port = parseInt(obj.url.split(':')[2].split('/')[0]);
   }
   return {
-    'headers': headers,
+    'headers_str': headers,
+    'headers': headers_obj,
     'server': host,
-    'port': port
+    'port': port,
+    'data': content,
+    'method': obj.method,
+    'path': resource_url,
   };
 }
 
-function prepNotarization(tabId, urlFilters) {
+function retrieveSession(tabId, urlFilters) {
   const oBR_handler = function (details) {
     if (details.method === "OPTIONS") return;
     chrome.webRequest.onBeforeRequest.removeListener(oBR_handler);
@@ -98,43 +103,26 @@ function prepNotarization(tabId, urlFilters) {
     types: ['main_frame', 'xmlhttprequest']
   }, extraInfoSpec);
 
-  const notarization = new Promise((resolve) => {
+  const sessionDetails = new Promise((resolve) => {
     const oSH_handler = async function (details) {
       if (details.method === "OPTIONS") return;
       chrome.webRequest.onSendHeaders.removeListener(oSH_handler);
       await recordHeaderDetails()
 
-      // 2.1 In header listeners, update extension UI when the url filter is matched and header is stored
-      chrome.action.setBadgeBackgroundColor(
-        {
-          color: 'green'
-        },
-      );
+      // 3. Extract the session details and return
+      // 3.1 trigger the extraction
+      const result = await extractHeaderDetails()
+      resolve(result)
+
+      // 3.2 update extension UI to show process completed and no longer active
       chrome.action.setBadgeText(
         {
-          text: 'ready'
+          text: ''
         },
       )
 
-      // 3. Create listener on the button event, have it
-      const onClickNotary = async () => {
-        chrome.action.onClicked.removeListener(onClickNotary);
-
-        // 3.1 trigger the notary flow and return notarization future
-        const result = await startNotarization()
-        resolve(result)
-
-        // 3.2 update extension UI to show process completed and no longer active
-        chrome.action.setBadgeText(
-          {
-            text: ''
-          },
-        )
-
-        // 3.3 close the tab
-        chrome.tabs.remove(tabId)
-      }
-      chrome.action.onClicked.addListener(onClickNotary);
+      // 3.3 close the tab
+      chrome.tabs.remove(tabId)
     };
     chrome.webRequest.onSendHeaders.addListener(
       oSH_handler, {
@@ -143,7 +131,7 @@ function prepNotarization(tabId, urlFilters) {
       types: ['main_frame', 'xmlhttprequest']
     });
   })
-  return notarization
+  return sessionDetails
 }
 
 async function recordHeaderDetails() {
@@ -165,12 +153,15 @@ async function recordHeaderDetails() {
       headers: rv.headers,
       server: rv.server,
       port: rv.port,
+      data: rv.data,
+      method: rv.method,
+      path: rv.path,
     }
   })
 }
 
-async function startNotarization() {
-  let headerDetails = await chrome.storage.session.get("headerDetails");
+async function extractHeaderDetails() {
+  let headerDetails = (await chrome.storage.session.get("headerDetails")).headerDetails;
   return headerDetails
 }
 
@@ -184,28 +175,28 @@ async function onInitiate(url, urlFilters) {
   // 1.1 update extension UI to show it's active
   chrome.action.setBadgeBackgroundColor(
     {
-      color: 'orange'
+      color: 'green'
     },
   );
   chrome.action.setBadgeText(
     {
-      text: 'active'
+      text: 'on'
     },
   )
 
   // 2. With the returned tab id, create request header listeners over the url prefix, store header to session storage
-  const notarization = prepNotarization(tab.id, urlFilters)
+  const session = retrieveSession(tab.id, urlFilters)
 
   // 2.2 Update the tab to have the url
-  chrome.tabs.update(tabId = tab.id, { url: url })
+  chrome.tabs.update(tab.id, { url: url })
 
-  return notarization
+  return session
 }
 
-const initiateNotary = async (message, sender, sendResponse) => {
-  if (message === 'initiateNotary') {
-    const result = await onInitiate("https://jomo.id/prove?flowId=103&publicAccountId=abcd", ["https://us-central1-jomo-omni.cloudfunctions.net/backend_apis/api/get_attestation_tree"])
+const prepareSession = async (message, _, sendResponse) => {
+  if (message.type === 'prepareSession') {
+    const result = await onInitiate(message.redirectUrl, message.urlFilters)
     sendResponse(result);
   }
 }
-chrome.runtime.onMessageExternal.addListener(initiateNotary);
+chrome.runtime.onMessageExternal.addListener(prepareSession);

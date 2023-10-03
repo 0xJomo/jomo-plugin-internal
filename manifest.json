@@ -1,17 +1,17 @@
 {
   "version": "1.0.0",
   "manifest_version": 3,
-  "name": "Jomo Prover",
-  "description": "Jomo witnesses and proves your interactions with any website",
+  "name": "Jomo Helper",
+  "description": "Jomo Helper observes your session to the target website so Jomo web can then use the session to retrieve your data. Rest assured that, at no time will your credentials or data be sent or accessed by anyone except for your own device, everything stays on your local machine.",
   "action": {
-    "default_title": "Jomo Prover"
+    "default_title": "Jomo Helper"
   },
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "permissions": [
     "scripting",
-    "runtime",
     "tabs",
     "webRequest",
     "storage"
@@ -25,5 +25,8 @@
       "http://localhost:3000/*"
     ],
     "accepts_tls_channel_id": false
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval';"
   }
 }
