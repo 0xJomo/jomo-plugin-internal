@@ -1,10 +1,10 @@
 {
   "version": "1.0.0",
   "manifest_version": 3,
-  "name": "Jomo Helper",
-  "description": "Jomo Helper observes your session to the target website so Jomo web can then use the session to retrieve your data.",
+  "name": "Jomo Copilot",
+  "description": "Jomo Copilot observes your session to the target website so Jomo web can then use the session to retrieve your data.",
   "action": {
-    "default_title": "Jomo Helper"
+    "default_title": "Jomo Copilot"
   },
   "background": {
     "service_worker": "background.js",
@@ -24,7 +24,9 @@
   "externally_connectable": {
     "ids": [],
     "matches": [
-      "http://localhost:3000/*"
+      "http://localhost:3000/*",
+      "http://127.0.0.1:3000/*",
+      "https://jomo.id/*"
     ],
     "accepts_tls_channel_id": false
   },
