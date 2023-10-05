@@ -14,7 +14,6 @@
     "512": "logo_simple.png"
   },
   "permissions": [
-    "tabs",
     "webRequest",
     "storage"
   ],
